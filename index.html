@@ -1,0 +1,1202 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kiểm tra đồ thị Euler và Hamilton</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+        }
+
+        body {
+            background: #f4f6f8;
+            padding: 25px;
+            color: #222;
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: auto;
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 8px;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 20px;
+        }
+
+        /* Thanh công cụ */
+        .toolbar {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 15px;
+        }
+
+        button {
+            border: none;
+            padding: 10px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 15px;
+            background: #e9ecef;
+        }
+
+        button:hover {
+            opacity: 0.85;
+        }
+
+        button.active {
+            background: #2563eb;
+            color: white;
+        }
+
+        .check-btn {
+            background: #16a34a;
+            color: white;
+        }
+
+        .clear-btn {
+            background: #dc2626;
+            color: white;
+        }
+
+        /* Canvas */
+        .canvas-wrapper {
+            border: 2px solid #ddd;
+            border-radius: 10px;
+            overflow: hidden;
+            background: white;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 520px;
+            cursor: crosshair;
+        }
+
+        .instruction {
+            margin-top: 12px;
+            padding: 12px;
+            background: #f1f5f9;
+            border-radius: 8px;
+            color: #475569;
+        }
+
+        /* Kết quả */
+        .result {
+            margin-top: 25px;
+        }
+
+        .result h2 {
+            margin-bottom: 15px;
+        }
+
+        .result-box {
+            padding: 15px;
+            margin-bottom: 12px;
+            border-radius: 10px;
+            border-left: 5px solid;
+        }
+
+        .euler {
+            background: #eff6ff;
+            border-color: #2563eb;
+        }
+
+        .hamilton {
+            background: #f0fdf4;
+            border-color: #16a34a;
+        }
+
+        .degree {
+            background: #fff7ed;
+            border-color: #f97316;
+        }
+
+        .path {
+            background: #faf5ff;
+            border-color: #9333ea;
+        }
+
+        .not-found {
+            color: #dc2626;
+        }
+
+        table {
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+
+        th, td {
+            border: 1px solid #ccc;
+            padding: 8px 15px;
+            text-align: center;
+        }
+
+        th {
+            background: #f1f5f9;
+        }
+
+        .empty {
+            color: #777;
+            font-style: italic;
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="container">
+
+    <h1>Kiểm tra đồ thị Euler và Hamilton</h1>
+
+    <p class="subtitle">
+        Vẽ đồ thị trực tiếp và chương trình sẽ tự động phân loại
+    </p>
+
+    <!-- TOOLBAR -->
+    <div class="toolbar">
+
+        <button id="addMode" class="active" onclick="setMode('add')">
+            ＋ Thêm đỉnh
+        </button>
+
+        <button id="edgeMode" onclick="setMode('edge')">
+            ↔ Nối cạnh
+        </button>
+
+        <button id="deleteMode" onclick="setMode('delete')">
+            ✕ Xóa
+        </button>
+
+        <button class="check-btn" onclick="checkGraph()">
+            ✓ Kiểm tra đồ thị
+        </button>
+
+        <button class="clear-btn" onclick="clearGraph()">
+            Xóa toàn bộ
+        </button>
+
+    </div>
+
+    <!-- CANVAS -->
+    <div class="canvas-wrapper">
+        <canvas id="graphCanvas"></canvas>
+    </div>
+
+    <div class="instruction">
+        <b>Hướng dẫn:</b>
+        Chọn <b>Thêm đỉnh</b> rồi click vào vùng trống để tạo đỉnh.
+        Chọn <b>Nối cạnh</b> rồi click lần lượt 2 đỉnh để tạo cạnh.
+        Chọn <b>Xóa</b> để xóa đỉnh hoặc cạnh.
+    </div>
+
+    <!-- RESULT -->
+    <div class="result">
+
+        <h2>Kết quả</h2>
+
+        <div id="resultContent">
+            <p class="empty">
+                Hãy vẽ đồ thị rồi nhấn "Kiểm tra đồ thị".
+            </p>
+        </div>
+
+    </div>
+
+</div>
+
+
+<script>
+
+const canvas = document.getElementById("graphCanvas");
+const ctx = canvas.getContext("2d");
+
+let vertices = [];
+let edges = [];
+
+let mode = "add";
+let selectedVertex = null;
+
+const RADIUS = 22;
+
+
+/* =========================================================
+   CANVAS
+========================================================= */
+
+function resizeCanvas() {
+
+    const rect = canvas.getBoundingClientRect();
+
+    canvas.width = rect.width;
+    canvas.height = rect.height;
+
+    drawGraph();
+}
+
+window.addEventListener("resize", resizeCanvas);
+
+
+/* =========================================================
+   MODE
+========================================================= */
+
+function setMode(newMode) {
+
+    mode = newMode;
+    selectedVertex = null;
+
+    document.querySelectorAll(".toolbar button")
+        .forEach(btn => btn.classList.remove("active"));
+
+    if (newMode === "add") {
+        document.getElementById("addMode").classList.add("active");
+        canvas.style.cursor = "crosshair";
+    }
+
+    if (newMode === "edge") {
+        document.getElementById("edgeMode").classList.add("active");
+        canvas.style.cursor = "pointer";
+    }
+
+    if (newMode === "delete") {
+        document.getElementById("deleteMode").classList.add("active");
+        canvas.style.cursor = "not-allowed";
+    }
+
+    drawGraph();
+}
+
+
+/* =========================================================
+   CLICK CANVAS
+========================================================= */
+
+canvas.addEventListener("click", function(e) {
+
+    const rect = canvas.getBoundingClientRect();
+
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    const vertex = getVertexAt(x, y);
+
+    /* THÊM ĐỈNH */
+    if (mode === "add") {
+
+        if (!vertex) {
+
+            const name = getVertexName(vertices.length);
+
+            vertices.push({
+                id: vertices.length,
+                name: name,
+                x: x,
+                y: y
+            });
+
+            drawGraph();
+        }
+
+        return;
+    }
+
+
+    /* NỐI CẠNH */
+    if (mode === "edge") {
+
+        if (!vertex) {
+            selectedVertex = null;
+            drawGraph();
+            return;
+        }
+
+        if (selectedVertex === null) {
+
+            selectedVertex = vertex.id;
+
+        } else {
+
+            if (selectedVertex !== vertex.id) {
+
+                if (!edgeExists(selectedVertex, vertex.id)) {
+
+                    edges.push({
+                        from: selectedVertex,
+                        to: vertex.id
+                    });
+                }
+            }
+
+            selectedVertex = null;
+        }
+
+        drawGraph();
+        return;
+    }
+
+
+    /* XÓA */
+    if (mode === "delete") {
+
+        if (vertex) {
+
+            deleteVertex(vertex.id);
+
+        } else {
+
+            const edgeIndex = getEdgeAt(x, y);
+
+            if (edgeIndex !== -1) {
+                edges.splice(edgeIndex, 1);
+            }
+        }
+
+        drawGraph();
+    }
+
+});
+
+
+/* =========================================================
+   TÊN ĐỈNH
+========================================================= */
+
+function getVertexName(index) {
+
+    let name = "";
+
+    while (index >= 0) {
+
+        name = String.fromCharCode(65 + (index % 26)) + name;
+
+        index = Math.floor(index / 26) - 1;
+    }
+
+    return name;
+}
+
+
+/* =========================================================
+   TÌM ĐỈNH
+========================================================= */
+
+function getVertexAt(x, y) {
+
+    for (let v of vertices) {
+
+        const dx = x - v.x;
+        const dy = y - v.y;
+
+        if (Math.sqrt(dx * dx + dy * dy) <= RADIUS) {
+            return v;
+        }
+    }
+
+    return null;
+}
+
+
+/* =========================================================
+   KIỂM TRA CẠNH ĐÃ TỒN TẠI
+========================================================= */
+
+function edgeExists(a, b) {
+
+    return edges.some(e =>
+        (e.from === a && e.to === b) ||
+        (e.from === b && e.to === a)
+    );
+}
+
+
+/* =========================================================
+   XÓA ĐỈNH
+========================================================= */
+
+function deleteVertex(id) {
+
+    vertices = vertices.filter(v => v.id !== id);
+
+    edges = edges.filter(e =>
+        e.from !== id && e.to !== id
+    );
+
+    /*
+        Đánh lại ID
+    */
+
+    const oldToNew = {};
+
+    vertices.forEach((v, index) => {
+
+        oldToNew[v.id] = index;
+
+        v.id = index;
+        v.name = getVertexName(index);
+    });
+
+    edges.forEach(e => {
+
+        e.from = oldToNew[e.from];
+        e.to = oldToNew[e.to];
+
+    });
+}
+
+
+/* =========================================================
+   TÌM CẠNH TẠI VỊ TRÍ CLICK
+========================================================= */
+
+function getEdgeAt(x, y) {
+
+    for (let i = 0; i < edges.length; i++) {
+
+        const e = edges[i];
+
+        const v1 = vertices.find(v => v.id === e.from);
+        const v2 = vertices.find(v => v.id === e.to);
+
+        if (!v1 || !v2) continue;
+
+        const distance = pointToSegmentDistance(
+            x,
+            y,
+            v1.x,
+            v1.y,
+            v2.x,
+            v2.y
+        );
+
+        if (distance < 8) {
+            return i;
+        }
+    }
+
+    return -1;
+}
+
+
+function pointToSegmentDistance(px, py, x1, y1, x2, y2) {
+
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+
+    if (dx === 0 && dy === 0) {
+        return Math.hypot(px - x1, py - y1);
+    }
+
+    const t =
+        ((px - x1) * dx + (py - y1) * dy)
+        /
+        (dx * dx + dy * dy);
+
+    const clamped = Math.max(0, Math.min(1, t));
+
+    const x = x1 + clamped * dx;
+    const y = y1 + clamped * dy;
+
+    return Math.hypot(px - x, py - y);
+}
+
+
+/* =========================================================
+   VẼ ĐỒ THỊ
+========================================================= */
+
+function drawGraph() {
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    /*
+        Vẽ cạnh
+    */
+
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = "#334155";
+
+    for (let e of edges) {
+
+        const v1 = vertices.find(v => v.id === e.from);
+        const v2 = vertices.find(v => v.id === e.to);
+
+        if (!v1 || !v2) continue;
+
+        ctx.beginPath();
+
+        ctx.moveTo(v1.x, v1.y);
+        ctx.lineTo(v2.x, v2.y);
+
+        ctx.stroke();
+    }
+
+
+    /*
+        Vẽ đỉnh
+    */
+
+    for (let v of vertices) {
+
+        ctx.beginPath();
+
+        ctx.arc(
+            v.x,
+            v.y,
+            RADIUS,
+            0,
+            Math.PI * 2
+        );
+
+        if (selectedVertex === v.id) {
+            ctx.fillStyle = "#bfdbfe";
+        } else {
+            ctx.fillStyle = "#ffffff";
+        }
+
+        ctx.fill();
+
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = "#2563eb";
+
+        ctx.stroke();
+
+
+        /*
+            Tên đỉnh
+        */
+
+        ctx.fillStyle = "#111827";
+
+        ctx.font = "bold 16px Arial";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+
+        ctx.fillText(
+            v.name,
+            v.x,
+            v.y
+        );
+    }
+}
+
+
+/* =========================================================
+   XÓA TOÀN BỘ
+========================================================= */
+
+function clearGraph() {
+
+    vertices = [];
+    edges = [];
+    selectedVertex = null;
+
+    drawGraph();
+
+    document.getElementById("resultContent").innerHTML = `
+        <p class="empty">
+            Hãy vẽ đồ thị rồi nhấn "Kiểm tra đồ thị".
+        </p>
+    `;
+}
+
+
+/* =========================================================
+   TẠO ADJACENCY LIST
+========================================================= */
+
+function createAdjacency() {
+
+    const n = vertices.length;
+
+    const adj = Array.from(
+        { length: n },
+        () => []
+    );
+
+    edges.forEach(e => {
+
+        adj[e.from].push(e.to);
+        adj[e.to].push(e.from);
+
+    });
+
+    return adj;
+}
+
+
+/* =========================================================
+   KIỂM TRA LIÊN THÔNG
+========================================================= */
+
+function isConnected(adj) {
+
+    const n = adj.length;
+
+    if (n === 0) return false;
+
+    const visited = Array(n).fill(false);
+
+    const stack = [0];
+
+    visited[0] = true;
+
+    while (stack.length > 0) {
+
+        const u = stack.pop();
+
+        for (const v of adj[u]) {
+
+            if (!visited[v]) {
+
+                visited[v] = true;
+                stack.push(v);
+
+            }
+        }
+    }
+
+    return visited.every(x => x);
+}
+
+
+/* =========================================================
+   TÌM ĐƯỜNG EULER
+========================================================= */
+
+function findEulerPath(adj) {
+
+    const n = adj.length;
+
+    if (n === 0) return null;
+
+    const degree = adj.map(a => a.length);
+
+    const odd = [];
+
+    for (let i = 0; i < n; i++) {
+
+        if (degree[i] % 2 === 1) {
+            odd.push(i);
+        }
+    }
+
+    if (odd.length !== 0 && odd.length !== 2) {
+        return null;
+    }
+
+    if (!isConnected(adj)) {
+        return null;
+    }
+
+
+    /*
+        Sao chép danh sách kề
+    */
+
+    const graph = adj.map(a => [...a]);
+
+    let start = 0;
+
+    if (odd.length === 2) {
+        start = odd[0];
+    } else {
+
+        for (let i = 0; i < n; i++) {
+
+            if (graph[i].length > 0) {
+                start = i;
+                break;
+            }
+        }
+    }
+
+
+    /*
+        Thuật toán Hierholzer
+    */
+
+    const stack = [start];
+    const path = [];
+
+    while (stack.length > 0) {
+
+        const u = stack[stack.length - 1];
+
+        if (graph[u].length > 0) {
+
+            const v = graph[u].pop();
+
+            const index = graph[v].indexOf(u);
+
+            if (index !== -1) {
+                graph[v].splice(index, 1);
+            }
+
+            stack.push(v);
+
+        } else {
+
+            path.push(stack.pop());
+
+        }
+    }
+
+
+    if (path.length !== edges.length + 1) {
+        return null;
+    }
+
+    return path.reverse();
+}
+
+
+/* =========================================================
+   HAMILTON PATH
+========================================================= */
+
+function findHamiltonPath(adj) {
+
+    const n = adj.length;
+
+    if (n === 0) return null;
+
+    const path = [];
+    const visited = Array(n).fill(false);
+
+
+    function backtrack(u) {
+
+        if (path.length === n) {
+            return true;
+        }
+
+        for (const v of adj[u]) {
+
+            if (!visited[v]) {
+
+                visited[v] = true;
+                path.push(v);
+
+                if (backtrack(v)) {
+                    return true;
+                }
+
+                path.pop();
+                visited[v] = false;
+            }
+        }
+
+        return false;
+    }
+
+
+    /*
+        Thử bắt đầu từ từng đỉnh
+    */
+
+    for (let start = 0; start < n; start++) {
+
+        path.length = 0;
+        visited.fill(false);
+
+        visited[start] = true;
+        path.push(start);
+
+        if (backtrack(start)) {
+            return [...path];
+        }
+    }
+
+    return null;
+}
+
+
+/* =========================================================
+   HAMILTON CYCLE
+========================================================= */
+
+function findHamiltonCycle(adj) {
+
+    const n = adj.length;
+
+    if (n < 3) return null;
+
+    const path = [0];
+
+    const visited = Array(n).fill(false);
+
+    visited[0] = true;
+
+
+    function backtrack(u) {
+
+        if (path.length === n) {
+
+            if (adj[u].includes(0)) {
+
+                return true;
+            }
+
+            return false;
+        }
+
+
+        for (const v of adj[u]) {
+
+            if (!visited[v]) {
+
+                visited[v] = true;
+                path.push(v);
+
+                if (backtrack(v)) {
+                    return true;
+                }
+
+                path.pop();
+                visited[v] = false;
+            }
+        }
+
+        return false;
+    }
+
+
+    if (backtrack(0)) {
+
+        return [...path, 0];
+
+    }
+
+    return null;
+}
+
+
+/* =========================================================
+   HIỂN THỊ ĐƯỜNG ĐI
+========================================================= */
+
+function formatPath(path) {
+
+    if (!path) return "";
+
+    return path
+        .map(i => vertices[i].name)
+        .join(" → ");
+}
+
+
+/* =========================================================
+   KIỂM TRA ĐỒ THỊ
+========================================================= */
+
+function checkGraph() {
+
+    if (vertices.length === 0) {
+
+        document.getElementById("resultContent").innerHTML = `
+            <div class="result-box">
+                <b>Chưa có đồ thị.</b>
+                <p>Hãy vẽ ít nhất một đồ thị trước khi kiểm tra.</p>
+            </div>
+        `;
+
+        return;
+    }
+
+
+    const adj = createAdjacency();
+
+    const degrees = adj.map(a => a.length);
+
+    const connected = isConnected(adj);
+
+
+    /* =========================
+       EULER
+    ========================= */
+
+    const oddVertices = [];
+
+    for (let i = 0; i < degrees.length; i++) {
+
+        if (degrees[i] % 2 === 1) {
+            oddVertices.push(i);
+        }
+    }
+
+    let eulerType = "";
+    let eulerPath = null;
+
+
+    if (!connected) {
+
+        eulerType = "Không Euler";
+
+    } else if (oddVertices.length === 0) {
+
+        eulerType = "Euler";
+        eulerPath = findEulerPath(adj);
+
+    } else if (oddVertices.length === 2) {
+
+        eulerType = "Bán Euler";
+        eulerPath = findEulerPath(adj);
+
+    } else {
+
+        eulerType = "Không Euler";
+    }
+
+
+    /* =========================
+       HAMILTON
+    ========================= */
+
+    const hamiltonCycle = findHamiltonCycle(adj);
+
+    let hamiltonType = "";
+    let hamiltonPath = null;
+
+
+    if (hamiltonCycle) {
+
+        hamiltonType = "Hamilton";
+
+    } else {
+
+        hamiltonPath = findHamiltonPath(adj);
+
+        if (hamiltonPath) {
+
+            hamiltonType = "Bán Hamilton";
+
+        } else {
+
+            hamiltonType = "Không Hamilton";
+        }
+    }
+
+
+    /* =========================
+       BẢNG BẬC
+    ========================= */
+
+    let degreeTable = `
+        <table>
+            <tr>
+                <th>Đỉnh</th>
+                <th>Bậc</th>
+            </tr>
+    `;
+
+    vertices.forEach((v, i) => {
+
+        degreeTable += `
+            <tr>
+                <td>${v.name}</td>
+                <td>${degrees[i]}</td>
+            </tr>
+        `;
+    });
+
+    degreeTable += "</table>";
+
+
+    /* =========================
+       EULER TEXT
+    ========================= */
+
+    let eulerText = "";
+
+    if (eulerType === "Euler") {
+
+        eulerText = `
+            <b>Euler</b>
+            <p>
+                Đồ thị liên thông và có <b>0 đỉnh bậc lẻ</b>.
+                Vì vậy đồ thị có chu trình Euler.
+            </p>
+        `;
+
+    } else if (eulerType === "Bán Euler") {
+
+        eulerText = `
+            <b>Bán Euler</b>
+            <p>
+                Đồ thị liên thông và có <b>2 đỉnh bậc lẻ</b>.
+                Vì vậy đồ thị có đường đi Euler nhưng không có chu trình Euler.
+            </p>
+        `;
+
+    } else {
+
+        eulerText = `
+            <b>Không Euler</b>
+            <p>
+                Đồ thị không thỏa điều kiện để có đường đi Euler.
+            </p>
+        `;
+    }
+
+
+    /* =========================
+       HAMILTON TEXT
+    ========================= */
+
+    let hamiltonText = "";
+
+    if (hamiltonType === "Hamilton") {
+
+        hamiltonText = `
+            <b>Hamilton</b>
+            <p>
+                Tìm được chu trình Hamilton đi qua mỗi đỉnh đúng một lần
+                và quay lại đỉnh ban đầu.
+            </p>
+        `;
+
+    } else if (hamiltonType === "Bán Hamilton") {
+
+        hamiltonText = `
+            <b>Bán Hamilton</b>
+            <p>
+                Không tìm được chu trình Hamilton nhưng tìm được
+                đường đi Hamilton đi qua mỗi đỉnh đúng một lần.
+            </p>
+        `;
+
+    } else {
+
+        hamiltonText = `
+            <b>Không Hamilton</b>
+            <p>
+                Không tìm được đường đi Hamilton.
+            </p>
+        `;
+    }
+
+
+    /* =========================
+       PATH TEXT
+    ========================= */
+
+    let pathText = "";
+
+    if (eulerPath) {
+
+        pathText += `
+            <p>
+                <b>Đường đi/chu trình Euler:</b><br>
+                ${formatPath(eulerPath)}
+            </p>
+        `;
+    }
+
+    if (hamiltonCycle) {
+
+        pathText += `
+            <p>
+                <b>Chu trình Hamilton:</b><br>
+                ${formatPath(hamiltonCycle)}
+            </p>
+        `;
+
+    } else if (hamiltonPath) {
+
+        pathText += `
+            <p>
+                <b>Đường đi Hamilton:</b><br>
+                ${formatPath(hamiltonPath)}
+            </p>
+        `;
+    }
+
+
+    /* =========================
+       HIỂN THỊ
+    ========================= */
+
+    document.getElementById("resultContent").innerHTML = `
+
+        <div class="result-box degree">
+
+            <h3>1. Bậc của các đỉnh</h3>
+
+            ${degreeTable}
+
+            <p style="margin-top:10px;">
+                <b>Số đỉnh:</b> ${vertices.length}
+                &nbsp;&nbsp;
+                <b>Số cạnh:</b> ${edges.length}
+            </p>
+
+        </div>
+
+
+        <div class="result-box euler">
+
+            <h3>2. Kiểm tra Euler</h3>
+
+            <p style="font-size:20px; margin:8px 0;">
+                Kết luận:
+                <b>${eulerType}</b>
+            </p>
+
+            ${eulerText}
+
+        </div>
+
+
+        <div class="result-box hamilton">
+
+            <h3>3. Kiểm tra Hamilton</h3>
+
+            <p style="font-size:20px; margin:8px 0;">
+                Kết luận:
+                <b>${hamiltonType}</b>
+            </p>
+
+            ${hamiltonText}
+
+        </div>
+
+
+        <div class="result-box path">
+
+            <h3>4. Kết quả đường đi / chu trình</h3>
+
+            ${pathText || "<p class='not-found'>Không tìm được đường đi hoặc chu trình phù hợp.</p>"}
+
+        </div>
+    `;
+}
+
+
+/* =========================================================
+   KHỞI TẠO
+========================================================= */
+
+resizeCanvas();
+
+</script>
+
+</body>
+</html>
